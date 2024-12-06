@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <title>Survey</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    .container {
+      text-align: center;
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      width: 100%;
+    }
+    .logo {
+      max-width: 150px;
+      height: auto;
+      margin-bottom: 1.5rem;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .question {
+      text-align: left;
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+    .rating {
+      display: flex;
+      justify-content: start;
+      gap: 0.5rem;
+      margin: 0.5rem 0;
+    }
+    .rating input[type="radio"] {
+      display: none;
+    }
+    .rating label {
+      font-size: 2rem;
+      color: #ccc;
+      cursor: pointer;
+    }
+    .rating label.selected {
+      color: #ffcc00;
+    }
+    input[type="text"], textarea {
+      padding: 0.8rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 1rem;
+      width: 100%;
+    }
+    button {
+      padding: 0.8rem;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .error-message {
+      color: red;
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="籽奥高中.png" alt="School Logo" class="logo">
+    <h1>Survey</h1>
+    <form id="surveyForm">
+      <div id="surveyContainer"></div>
+      <button type="submit">Submit</button>
+    </form>
+  </div>
+
+  <script>
+    // Load user data from localStorage
+    const user = JSON.parse(localStorage.getItem('user'));
+
+    if (!user) {
+      alert('You are not logged in!');
+      window.location.href = './index.html';
+    } else {
+      // 定义新的问题
+      const questions = [
+        {
+          text: "你想对殷闻老师说的话（建议或者意见都可以）",
+          requireRating: false,
+          requireLength: true
+        },
+        {
+          text: "你想对籽奥说的话",
+          requireRating: false,
+          requireLength: false
+        }
+      ];
+
+      // Generate survey questions
+      const surveyContainer = document.getElementById('surveyContainer');
+      questions.forEach((question, index) => {
+        const questionDiv = document.createElement('div');
+        questionDiv.classList.add('question');
+        questionDiv.innerHTML = `
+          <p>${index + 1}. ${question.text}</p>
+          <textarea id="comment-q${index}" name="comment-q${index}" rows="4" 
+            ${question.requireLength ? 'minlength="1" maxlength="200"' : ''} required></textarea>
+          <div id="error-q${index}" class="error-message"></div>
+        `;
+        surveyContainer.appendChild(questionDiv);
+      });
+
+      document.getElementById('surveyForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        let allCommentsValid = true;
+
+        questions.forEach((question, index) => {
+          const comment = document.getElementById(`comment-q${index}`);
+          const errorElement = document.getElementById(`error-q${index}`);
+          errorElement.textContent = '';
+
+          if (question.requireLength && (comment.value.length < 1 || comment.value.length > 200)) {
+            allCommentsValid = false;
+            errorElement.innerHTML = '评论必须在 1 到 200 字之间 (Comment must be between 20 and 200 characters)';
+          }
+        });
+
+        if (!allCommentsValid) {
+          const firstError = document.querySelector('.error-message:not(:empty)');
+          if (firstError) {
+            firstError.scrollIntoView({ behavior: 'smooth' });
+          }
+          return;
+        }
+
+        try {
+          const submitButton = document.querySelector('button[type="submit"]');
+          submitButton.disabled = true;
+          submitButton.textContent = 'Submitting...';
+          submitButton.style.backgroundColor = '#ccc';
+          submitButton.style.cursor = 'not-allowed';
+
+          const responses = questions.map((_, index) => ({
+            username: user.name,
+            questionNumber: index + 1,
+            comment: document.getElementById(`comment-q${index}`).value
+          }));
+
+          for (const response of responses) {
+            await fetch('/.netlify/functions/submit-survey-airtable', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(response),
+            });
+          }
+          alert('Thank you for completing the survey!');
+          window.location.href = './game/index_game.html';
+        } catch (error) {
+          const submitButton = document.querySelector('button[type="submit"]');
+          submitButton.disabled = false;
+          submitButton.textContent = 'Submit';
+          submitButton.style.backgroundColor = '#4CAF50';
+          submitButton.style.cursor = 'pointer';
+          console.error('Client Error:', error);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
