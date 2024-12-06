@@ -4,135 +4,260 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JavaScript Flappy Bird</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: white;
-        }
         canvas {
+            border: 1px solid black;
             display: block;
             margin: 0 auto;
             touch-action: none; /* Prevents default touch behaviors */
-            background: white;
+            width: 100%; /* 使canvas宽度填充容器 */
+            max-width: 600px; /* 设置最大宽度 */
+            height: auto; /* 高度自动调整 */
         }
         .instructions {
             text-align: center;
             margin: 10px;
             font-family: Arial, sans-serif;
             color: #333;
-            position: absolute;
-            top: 10px;
-            width: 100%;
-            z-index: 1;
-        }
-        #vipEndScreen {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        #vipEndScreen > div {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-        #characterSelect {
-            text-align: center;
-            margin: 20px;
-        }
-        #characterSelect div {
-            display: inline-block;
-            cursor: pointer;
-            margin: 10px;
-        }
-        #characterSelect img {
-            width: 100px;
-            height: 100px;
-        }
-        #characterSelect p {
-            margin: 5px 0 0 0;
-        }
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(10deg); }
         }
     </style>
-    <script>
-        // Constants
-        const GRAVITY = 0.25;
-        const PIPE_SPEED = 2;
-        const PIPE_FREQUENCY = 90; // Frames between pipe creation
-        const FLAP_STRENGTH = -7;
-        const PIPE_GAP = 150; // Fixed gap size
+    <script src="./gameEnd.js"></script>
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <!-- 添加角色选择界面 -->
+    <div id="characterSelect" style="text-align: center; margin: 20px;">
+        <h2>选择你的英雄</h2>
+        <div style="display: flex; justify-content: center; gap: 20px;">
+            <div onclick="selectCharacter('./wzj.png')" style="cursor: pointer;">
+                <img src="./wzj.png" style="width: 100px; height: 100px;">
+                <p>老爷爷</p>
+            </div>
+            <div onclick="selectCharacter('./david.png')" style="cursor: pointer;">
+                <img src="./david.png" style="width: 100px; height: 100px;">
+                <p>David</p>
+            </div>
+        </div>
+    </div>
+    <div id="gameContainer" style="display: none;">
+        <div class="instructions">Press SPACE or Touch Screen to Jump</div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
 
+    <!-- 添加 VIP 结算页面 -->
+    <div id="vipEndScreen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+        <div style="position: relative; top: 50%; transform: translateY(-50%); background: white; margin: 0 auto; padding: 20px; max-width: 500px; border-radius: 15px; text-align: center;">
+            <h2>你4了!</h2>
+            <div id="characterAnimation" style="margin: 20px auto;">
+                <!-- 角色动画将在这里显示 -->
+            </div>
+            <div id="finalScore" style="font-size: 24px; margin: 10px;"></div>
+            <div id="schoolRecord" style="font-size: 20px; margin: 10px; color: #FF4081;"></div>
+            <div id="funnyMessage" style="font-size: 18px; margin: 10px; color: #666;"></div>
+            <button onclick="restartGame()" style="padding: 10px 20px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease;">再来一局</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Constants - 初始值设为0，后面会在resizeGame中更新
         let WINDOW_WIDTH = 0;
         let WINDOW_HEIGHT = 0;
+        const GRAVITY = 0.25;
         let PIPE_WIDTH = 0;
+        let PIPE_GAP = 0;
         let BIRD_WIDTH = 0;
         let BIRD_HEIGHT = 0;
 
-        // Preload images and sounds
-        const images = {};
-        const sounds = {};
-        const assetsToLoad = [
-            { name: 'bird', src: './wzj.png' },
-            { name: 'flapSound', src: './flap_wu.mp3' },
-            { name: 'scoreSound', src: './score.mp3' },
-            { name: 'hitSound', src: './hit.mp3' },
-            { name: 'endSound', src: './wu_end.mp3' },
-            { name: 'bgm', src: 'bgm.mp3' }
-        ];
+        // Load and configure sounds
+        const flapSoundWu = new Audio('./flap_wu.mp3');
+        const flapSoundDavid = new Audio('./flap_david.wav');
+        const scoreSound = new Audio('./score.mp3');
+        const hitSound = new Audio('./hit.mp3');
+        const endSoundWu = new Audio('./wu_end.mp3');
+        const endSoundDavid = new Audio('./david_end.mp3');
+        let currentFlapSound; // 用于存储当前角色的拍打音效
 
-        let currentFlapSound;
-        let bgMusic;
+        // Set volume for all sounds (0.0 to 1.0)
+        flapSoundWu.volume = 0.5;
+        flapSoundDavid.volume = 0.5;
+        scoreSound.volume = 0.5;
+        hitSound.volume = 0.5;
+        endSoundWu.volume = 0.5;
+        endSoundDavid.volume = 0.5;
 
-        function loadAssets() {
-            assetsToLoad.forEach(asset => {
-                if (asset.name.endsWith('Sound')) {
-                    sounds[asset.name] = new Audio(asset.src);
-                    sounds[asset.name].volume = 0.5;
-                } else if (asset.name === 'bgm') {
-                    bgMusic = new Audio(asset.src);
-                    bgMusic.loop = true;
-                    bgMusic.volume = 0.3;
-                    bgMusic.play().catch(() => {
-                        document.addEventListener('click', () => {
-                            bgMusic.play();
-                        }, { once: true });
-                    });
-                } else {
-                    images[asset.name] = new Image();
-                    images[asset.name].src = asset.src;
-                }
+        // Preload sounds
+        function preloadSounds() {
+            flapSoundWu.load();
+            flapSoundDavid.load();
+            scoreSound.load();
+            hitSound.load();
+            endSoundWu.load();
+            endSoundDavid.load();
+        }
+
+        // Play sounds with error handling
+        function playSound(sound) {
+            try {
+                // Reset sound to start if it's already playing
+                sound.currentTime = 0;
+                sound.play().catch(error => {
+                    console.log("Sound play failed:", error);
+                });
+            } catch (error) {
+                console.log("Sound error:", error);
+            }
+        }
+
+        // 修改图片加载相关的代码
+        const birdImage = new Image();
+        let imageLoaded = false;
+
+        const bgMusic = new Audio('bgm.mp3');
+        bgMusic.loop = true;
+
+        // 在页面加载完成时立即播放
+        document.addEventListener('DOMContentLoaded', function() {
+            bgMusic.play().catch(() => {
+                // 如果自动播放失败，等待第一次用户交互时播放
+                document.addEventListener('click', () => {
+                    bgMusic.play();
+                }, { once: true });
             });
+        });
+
+        function selectCharacter(imagePath) {
+            // 开始播放背景音乐
+            bgMusic.play().catch(error => console.log('Auto-play prevented'));
+            
+            // 设置当前角色的拍打音效
+            if (imagePath.includes('wzj.png')) {
+                currentFlapSound = flapSoundWu;
+            } else if (imagePath.includes('david.png')) {
+                currentFlapSound = flapSoundDavid;
+            }
+            
+            // 隐藏角色选择界面，显示游戏界面
+            document.getElementById('characterSelect').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            
+            // 加载选中的角色图片
+            birdImage.src = imagePath;
+            birdImage.onerror = function() {
+                console.error('Error loading image. Falling back to rectangle');
+                imageLoaded = true;
+                initializeAndStartGame();
+            };
+            birdImage.onload = function() {
+                console.log('Bird image loaded successfully');
+                imageLoaded = true;
+                // 根据图片比例调整鸟的尺寸
+                const aspectRatio = birdImage.width / birdImage.height;
+                bird.width = BIRD_HEIGHT * aspectRatio;
+                bird.height = BIRD_HEIGHT;
+                initializeAndStartGame();
+            };
+        }
+
+        // 添加新的初始化函数
+        function initializeAndStartGame() {
+            // 重置游戏状态
+            gameActive = true;
+            pipes = [];
+            score = 0;
+            birdMovement = 0;
+            
+            // 重新初始化尺寸和位置
+            resizeGame();
+            bird.y = WINDOW_HEIGHT / 2;
+            
+            // 开始游戏循环
+            gameLoop();
         }
 
         // Game state
-        let gameActive = false;
+        let birdMovement = 0;
+        let gameActive = true;
         let score = 0;
         let highScore = 0;
         let pipes = [];
-        let bird = { x: 0, y: 0, width: 0, height: 0, velocity: 0 };
+        
+        // Bird position - 初始化时只设置基属性
+        let bird = {
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0
+        };
 
-        // Pipe texts
+        // 1. 添加文字数组（在游戏变量声明区域）
         const pipeTexts = [
             '每', '一', '个', '孩', '子', '都', '是', 
-            '独', '一', '无', '二', '的', '研', '究', 
-            '学', '生', '就', '是', '研', '究', '教', 
+            '独', '一', '无', '二', '的', '研', '究',
+            '学', '生', '就', '是', '研', '究', '教',
             '育', '世', '界', '因', '我', '而', '美', '丽'
         ];
         let currentTextIndex = 0;
 
-        // Funny messages
+        // 2. 修改 createPipe 函数
+        function createPipe() {
+            const pipeGapPosition = Math.random() * (WINDOW_HEIGHT - PIPE_GAP - 100) + 50;
+            
+            pipes.push({
+                x: WINDOW_WIDTH,
+                y: 0,
+                width: PIPE_WIDTH,
+                height: pipeGapPosition,
+                passed: false,
+                text: pipeTexts[currentTextIndex],
+                textVisible: true
+            });
+
+            pipes.push({
+                x: WINDOW_WIDTH,
+                y: pipeGapPosition + PIPE_GAP,
+                width: PIPE_WIDTH,
+                height: WINDOW_HEIGHT - pipeGapPosition - PIPE_GAP,
+                passed: false
+            });
+
+            // 更新文字索引，循环使用文字
+            currentTextIndex = (currentTextIndex + 1) % pipeTexts.length;
+        }
+
+        // 3. 修改 drawPipes 函数
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                // 绘制管道
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillRect(pipe.x, pipe.y, pipe.width, pipe.height);
+                
+                // 只在上管道时绘制文字
+                if (pipe.text && pipe.textVisible && pipe.y === 0) {
+                    // 保存当前上下文状态
+                    ctx.save();
+                    
+                    // 设置文字样式
+                    ctx.fillStyle = '#FFD700';  // 金色
+                    ctx.font = 'bold 30px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // 计算文字位置（在管道间隙的中心）
+                    const textX = pipe.x + pipe.width/2;
+                    const textY = pipe.height + PIPE_GAP/2;
+                    
+                    // 绘制文字
+                    ctx.fillText(pipe.text, textX, textY);
+                    
+                    // 恢复上下文状态
+                    ctx.restore();
+                }
+            });
+        }
+
+        // 添加搞笑消息数组
         const funnyMessages = {
             'wzj.png': [
                 "吴校长说：你这个年纪上课睡得着觉？",
@@ -146,152 +271,7 @@
             ]
         };
 
-        // Canvas and context
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        document.body.appendChild(canvas);
-
-        // Input handling
-        function handleKeyDown(event) {
-            if (event.code === 'Space') {
-                flap();
-                event.preventDefault();
-            }
-        }
-
-        function handleClick() {
-            flap();
-        }
-
-        function handleTouchStart() {
-            flap();
-        }
-
-        function flap() {
-            if (gameActive) {
-                bird.velocity = FLAP_STRENGTH;
-                playSound(currentFlapSound);
-            } else {
-                resetGame();
-            }
-        }
-
-        // Sound handling
-        function playSound(sound) {
-            if (sound.currentTime) {
-                sound.currentTime = 0;
-            }
-            sound.play().catch(() => {});
-        }
-
-        // Game loop
-        function gameTick() {
-            if (gameActive) {
-                // Update bird position
-                bird.velocity += GRAVITY;
-                bird.y += bird.velocity;
-
-                // Update pipes
-                pipes.forEach(pipe => {
-                    pipe.x -= PIPE_SPEED;
-                });
-
-                // Remove passed pipes
-                pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH > 0);
-
-                // Create new pipes
-                if (pipes.length === 0 || pipes[pipes.length - 1].x < WINDOW_WIDTH - PIPE_FREQUENCY) {
-                    createPipe();
-                }
-
-                // Check for collisions
-                if (bird.y + bird.height >= WINDOW_HEIGHT || bird.y <= 0) {
-                    playSound(hitSound);
-                    gameActive = false;
-                    showVipEndScreen();
-                }
-
-                pipes.forEach(pipe => {
-                    if (!pipe.passed && pipe.x + PIPE_WIDTH < bird.x) {
-                        pipe.passed = true;
-                        score += 0.5;
-                        playSound(scoreSound);
-                    }
-                });
-
-                // Check for pipe collision
-                for (let pipe of pipes) {
-                    if (bird.x < pipe.x + PIPE_WIDTH &&
-                        bird.x + bird.width > pipe.x &&
-                        bird.y < pipe.y + pipe.height &&
-                        bird.y + bird.height > pipe.y) {
-                        playSound(hitSound);
-                        gameActive = false;
-                        showVipEndScreen();
-                    }
-                }
-            }
-
-            // Draw
-            ctx.clearRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-
-            // Draw pipes
-            pipes.forEach(pipe => {
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(pipe.x, pipe.y, PIPE_WIDTH, pipe.height);
-                if (pipe.text && pipe.textVisible && pipe.y === 0) {
-                    ctx.save();
-                    ctx.fillStyle = '#FFD700';
-                    ctx.font = 'bold 30px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    const textX = pipe.x + PIPE_WIDTH / 2;
-                    const textY = pipe.height + PIPE_GAP / 2;
-                    ctx.fillText(pipe.text, textX, textY);
-                    ctx.restore();
-                }
-            });
-
-            // Draw bird
-            if (images.bird.complete) {
-                ctx.save();
-                ctx.translate(bird.x + bird.width / 2, bird.y + bird.height / 2);
-                ctx.rotate(bird.velocity * 0.02);
-                ctx.drawImage(images.bird, -bird.width / 2, -bird.height / 2, bird.width, bird.height);
-                ctx.restore();
-            } else {
-                ctx.fillStyle = 'red';
-                ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
-            }
-
-            // Draw score
-            ctx.fillStyle = 'black';
-            ctx.font = '36px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`Score: ${Math.floor(score)}`, WINDOW_WIDTH / 2, 50);
-
-            if (!gameActive) {
-                ctx.fillText(`High Score: ${Math.floor(highScore)}`, WINDOW_WIDTH / 2, 100);
-                ctx.font = '24px Arial';
-                ctx.fillText('Press Space or Touch to Restart', WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
-            }
-
-            requestAnimationFrame(gameTick);
-        }
-
-        // Reset game
-        function resetGame() {
-            gameActive = true;
-            score = 0;
-            bird.x = WINDOW_WIDTH * 0.25;
-            bird.y = WINDOW_HEIGHT / 2;
-            bird.velocity = 0;
-            pipes = [];
-            currentTextIndex = 0;
-            gameTick();
-        }
-
-        // Show VIP end screen
+        // 修改游戏结束逻辑
         async function showVipEndScreen() {
             const user = JSON.parse(localStorage.getItem('user'));
             if (!user || !user.name) {
@@ -299,59 +279,59 @@
                 window.location.href = '../index.html';
                 return;
             }
-
+            
             const vipScreen = document.getElementById('vipEndScreen');
             const characterAnimation = document.getElementById('characterAnimation');
             const finalScore = document.getElementById('finalScore');
             const schoolRecord = document.getElementById('schoolRecord');
             const funnyMessage = document.getElementById('funnyMessage');
             const restartButton = document.querySelector('#vipEndScreen button');
-
-            // Disable restart button and change style
+            
+            // 禁用重启按钮并改变样式
             restartButton.disabled = true;
             restartButton.style.backgroundColor = '#cccccc';
             restartButton.style.cursor = 'not-allowed';
             restartButton.textContent = '加载中...';
-
-            // Play end sound
-            const currentCharacter = images.bird.src.split('/').pop();
+            
+            // 播放音效和显示基本界面
+            const currentCharacter = birdImage.src.split('/').pop();
             if (currentCharacter === 'wzj.png') {
-                playSound(sounds.endSound);
+                playSound(endSoundWu);
             } else if (currentCharacter === 'david.png') {
-                playSound(sounds.endSound);
+                playSound(endSoundDavid);
             }
-
-            vipScreen.style.display = 'flex';
-
-            // Create character animation
+            
+            vipScreen.style.display = 'block';
+            
+            // 创建角色动画
             const character = document.createElement('img');
-            character.src = images.bird.src;
+            character.src = birdImage.src;
             character.style.width = '150px';
             character.style.height = '150px';
             character.style.animation = 'bounce 1s infinite';
             characterAnimation.innerHTML = '';
             characterAnimation.appendChild(character);
-
-            // Show loading state
+            
+            // 显示加载状态
             schoolRecord.textContent = '正在加载最高分记录...';
             finalScore.textContent = '计算得分中...';
-
+            
             try {
-                // Get top score
+                // 获取最高分记录
                 const topScoreResponse = await fetch('/.netlify/functions/get-top-score');
                 if (!topScoreResponse.ok) {
                     throw new Error('Failed to fetch top score');
                 }
                 const topScoreData = await topScoreResponse.json();
-
-                // Show top score
+                
+                // 显示最高分记录
                 schoolRecord.textContent = `校记录保持者: ${topScoreData.topPlayer} (${topScoreData.topScore}分)`;
-
-                // Show current score after delay
+                
+                // 短暂延迟后显示当前分数
                 await new Promise(resolve => setTimeout(resolve, 500));
                 finalScore.textContent = `最终得分: ${Math.floor(score)}`;
-
-                // Submit score
+                
+                // 提交当前分数
                 await fetch('/.netlify/functions/submit-game-score', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -360,8 +340,8 @@
                         score: Math.floor(score)
                     })
                 });
-
-                // Check if new record
+                
+                // 检查是否打破记录
                 if (Math.floor(score) > topScoreData.topScore) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     schoolRecord.textContent = `新的记录保持者: ${user.name} (${Math.floor(score)}分)!`;
