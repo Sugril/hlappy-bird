@@ -26,11 +26,11 @@
 <body>
     <!-- 添加角色选择界面 -->
     <div id="characterSelect" style="text-align: center; margin: 20px;">
-        <h2>选择你的角色</h2>
+        <h2>选择你的英雄</h2>
         <div style="display: flex; justify-content: center; gap: 20px;">
             <div onclick="selectCharacter('./wzj.png')" style="cursor: pointer;">
                 <img src="./wzj.png" style="width: 100px; height: 100px;">
-                <p>Wu</p>
+                <p>老爷爷</p>
             </div>
             <div onclick="selectCharacter('./david.png')" style="cursor: pointer;">
                 <img src="./david.png" style="width: 100px; height: 100px;">
@@ -46,7 +46,7 @@
     <!-- 添加 VIP 结算页面 -->
     <div id="vipEndScreen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
         <div style="position: relative; top: 50%; transform: translateY(-50%); background: white; margin: 0 auto; padding: 20px; max-width: 500px; border-radius: 15px; text-align: center;">
-            <h2>游戏结束!</h2>
+            <h2>你死了！</h2>
             <div id="characterAnimation" style="margin: 20px auto;">
                 <!-- 角色动画将在这里显示 -->
             </div>
