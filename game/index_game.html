@@ -181,12 +181,6 @@
         let gameActive = true;
         let score = 0;
         let highScore = 0;
-        // 金币相关变量
-        let coins = [];
-        let coinsCollected = 0; // 记录吃到的金币数量
-        const minPipesBetweenCoins = 3;
-        const maxPipesBetweenCoins = 5;
-        let pipesSinceLastCoin = 0; // 自上次生成金币以来的管道数量
         let pipes = [];
         
         // Bird position - 初始化时只设置基属性
@@ -230,39 +224,8 @@
 
             // 更新文字索引，循环使用文字
             currentTextIndex = (currentTextIndex + 1) % pipeTexts.length;
-
-            // 更新管道计数
-            pipesSinceLastCoin += 1;
-
-            // 检查是否生成金币
-            if (pipesSinceLastCoin >= Math.floor(Math.random() * (maxPipesBetweenCoins - minPipesBetweenCoins + 1)) + minPipesBetweenCoins) {
-                // 生成金币的y位置，确保不与管道重叠
-                let coinY = Math.random() * (WINDOW_HEIGHT - 60) + 30; // 假设金币半径为15，总高度为30
-                let coinSafe = false;
-                while (!coinSafe) {
-                    coinSafe = true;
-                    // 检查金币是否与任何管道重叠
-                    for (let pipe of pipes) {
-                        if (coinY + 15 > pipe.y && coinY - 15 < pipe.y + pipe.height) {
-                        coinSafe = false;
-                        coinY = Math.random() * (WINDOW_HEIGHT - 60) + 30;
-                    break;
-                }
-            }
         }
 
-        // 添加金币
-        coins.push({
-            x: WINDOW_WIDTH + PIPE_WIDTH,
-            y: coinY,
-            radius: 15,
-            collected: false
-        });
-
-        // 重置管道计数
-        pipesSinceLastCoin = 0;
-            }
-        }
         // 3. 修改 drawPipes 函数
         function drawPipes() {
             pipes.forEach(pipe => {
@@ -290,18 +253,6 @@
                     
                     // 恢复上下文状态
                     ctx.restore();
-                }
-            });
-
-    // 绘制金币
-    coins.forEach(coin => {
-        if (!coin.collected) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'gold';
-            ctx.fill();
-            ctx.restore();
                 }
             });
         }
@@ -380,13 +331,6 @@
                 await new Promise(resolve => setTimeout(resolve, 500));
                 finalScore.textContent = `最终得分: ${Math.floor(score)}`;
                 
-                // 显示金币数量
-                const coinsElement = document.createElement('div');
-                coinsElement.textContent = `金币数量: ${coinsCollected}`;
-                coinsElement.style.fontSize = '24px';
-                coinsElement.style.margin = '10px';
-                vipScreen.appendChild(coinsElement);
-
                 // 提交当前分数
                 await fetch('/.netlify/functions/submit-game-score', {
                     method: 'POST',
@@ -420,13 +364,8 @@
                 console.error('Error:', error);
                 schoolRecord.textContent = '无法获取校记录信息';
                 finalScore.textContent = `最终得分: ${Math.floor(score)}`;
-                const coinsElement = document.createElement('div');
-                coinsElement.textContent = `金币数量: ${coinsCollected}`;
-                coinsElement.style.fontSize = '24px';
-                coinsElement.style.margin = '10px';
-                vipScreen.appendChild(coinsElement);
                 funnyMessage.textContent = '发生错误，请稍后再试';
-
+                
                 // 即使出错也启用重启按钮
                 restartButton.disabled = false;
                 restartButton.style.backgroundColor = '#4CAF50';
@@ -529,56 +468,11 @@
                 });
 
                 pipes = pipes.filter(pipe => pipe.x > -PIPE_WIDTH);
-                // 更新金币位置
-                coins.forEach(coin => {
-                    if (!coin.collected) {
-                        coin.x -= 2;
-            }
-        });
 
-        // 移除离开屏幕的金币
-        coins = coins.filter(coin => coin.x + coin.radius > 0);
-
-        // 检测金币碰撞
-        coins.forEach(coin => {
-            if (!coin.collected && bird.x < coin.x + coin.radius &&
-                bird.x + bird.width > coin.x &&
-                bird.y < coin.y + coin.radius &&
-                bird.y + bird.height > coin.y) {
-                coin.collected = true;
-                coinsCollected += 1; // 吃到金币数量增加
-                playSound(scoreSound);
-            }
-        });
-
-        // 生成新的管道和金币
-        if (pipesSinceLastCoin >= Math.floor(Math.random() * (maxPipesBetweenCoins - minPipesBetweenCoins + 1)) + minPipesBetweenCoins) {
-            // 生成金币
-            let coinY = Math.random() * (WINDOW_HEIGHT - 60) + 30;
-            let coinSafe = false;
-            while (!coinSafe) {
-                coinSafe = true;
-                for (let pipe of pipes) {
-                    if (coinY + 15 > pipe.y && coinY - 15 < pipe.y + pipe.height) {
-                        coinSafe = false;
-                        coinY = Math.random() * (WINDOW_HEIGHT - 60) + 30;
-                        break;
-                    }
+                if (pipes.length === 0 || pipes[pipes.length - 2].x < WINDOW_WIDTH - 300) {
+                    createPipe();
                 }
-            }
 
-            coins.push({
-                x: WINDOW_WIDTH + PIPE_WIDTH,
-                y: coinY,
-                radius: 15,
-                collected: false
-            });
-
-            // 重置管道计数
-            pipesSinceLastCoin = 0;
-        }
-
-                // 检测管道碰撞
                 pipes.forEach(pipe => {
                     if (!pipe.passed && pipe.x + pipe.width < bird.x) {
                         pipe.passed = true;
@@ -604,7 +498,7 @@
         // Add touch/click controls
         function handleJump() {
             if (gameActive) {
-                birdMovement = -6;
+                birdMovement = -7;
                 playSound(currentFlapSound); // 使用当前角色的拍打音效
             } else {
                 gameActive = true;
