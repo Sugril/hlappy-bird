@@ -23,7 +23,7 @@
 </head>
 <body>
     <div id="characterSelect" style="text-align: center; margin: 20px;">
-        <h2>Choose Your Hero</h2>
+        <h2>请选择你的英雄！</h2>
         <div style="display: flex; justify-content: center; gap: 20px;">
             <div onclick="selectCharacter('./wzj.png')" style="cursor: pointer;">
                 <img src="./wzj.png" style="width: 100px; height: 100px;">
@@ -227,113 +227,319 @@
                 window.location.href = '../index.html';
                 return;
             }
-
+            
             const vipScreen = document.getElementById('vipEndScreen');
             const characterAnimation = document.getElementById('characterAnimation');
             const finalScore = document.getElementById('finalScore');
             const schoolRecord = document.getElementById('schoolRecord');
             const funnyMessage = document.getElementById('funnyMessage');
-
-            characterAnimation.innerHTML = `<img src="${user.character}" style="width: 80px; height: 80px; margin-top: 20px;">`;
-            finalScore.innerHTML = `Final Score: ${score}`;
-            schoolRecord.innerHTML = `Your School Rank: ${user.rank}`;
-            funnyMessage.innerHTML = (user.character.includes('wzj.png') ? funnyMessages['wzj.png'] : funnyMessages['david.png']).join('<br>');
-
+            const restartButton = document.querySelector('#vipEndScreen button');
+            
+            // 禁用重启按钮并改变样式
+            restartButton.disabled = true;
+            restartButton.style.backgroundColor = '#cccccc';
+            restartButton.style.cursor = 'not-allowed';
+            restartButton.textContent = '加载中...';
+            
+            // 播放音效和显示基本界面
+            const currentCharacter = birdImage.src.split('/').pop();
+            if (currentCharacter === 'wzj.png') {
+                playSound(endSoundWu);
+            } else if (currentCharacter === 'david.png') {
+                playSound(endSoundDavid);
+            }
+            
             vipScreen.style.display = 'block';
-            endSoundWu.play().catch(() => endSoundDavid.play());
-        }
-
-        function resizeGame() {
-            WINDOW_WIDTH = window.innerWidth;
-            WINDOW_HEIGHT = window.innerHeight;
-            canvas.width = WINDOW_WIDTH;
-            canvas.height = WINDOW_HEIGHT;
-            PIPE_WIDTH = Math.floor(WINDOW_WIDTH * 0.1);
-            PIPE_GAP = 200;
-            BIRD_WIDTH = 40;
-            BIRD_HEIGHT = 40;
-        }
-
-        function updateGame() {
-            if (!gameActive) return;
-
-            birdMovement += GRAVITY;
-
-            if (bird.y + birdMovement < 0) birdMovement = 0;
-            if (bird.y + birdMovement + BIRD_HEIGHT > WINDOW_HEIGHT) {
-                endGame();
-                return;
-            }
-
-            bird.y += birdMovement;
-
-            if (pipes.length === 0 || pipes[pipes.length - 1].x <= WINDOW_WIDTH - 300) {
-                createPipe();
-            }
-
-            pipes.forEach(pipe => {
-                pipe.x -= 2;
-
-                if (pipe.x + pipe.width < 0) {
-                    pipes.shift();
-                    pipes.shift();
+            
+            // 创建角色动画
+            const character = document.createElement('img');
+            character.src = birdImage.src;
+            character.style.width = '150px';
+            character.style.height = '150px';
+            character.style.animation = 'bounce 1s infinite';
+            characterAnimation.innerHTML = '';
+            characterAnimation.appendChild(character);
+            
+            // 显示加载状态
+            schoolRecord.textContent = '正在加载最高分记录...';
+            finalScore.textContent = '计算得分中...';
+            
+            try {
+                // 获取最高分记录
+                const topScoreResponse = await fetch('/.netlify/functions/get-top-score');
+                if (!topScoreResponse.ok) {
+                    throw new Error('Failed to fetch top score');
                 }
-
-                if (!pipe.passed && pipe.x + pipe.width < bird.x) {
-                    pipe.passed = true;
-                    score++;
-                    scoreSound.play();
+                const topScoreData = await topScoreResponse.json();
+                
+                // 显示最高分记录
+                schoolRecord.textContent = `校记录保持者: ${topScoreData.topPlayer} (${topScoreData.topScore}分)`;
+                
+                // 短暂延迟后显示当前分数
+                await new Promise(resolve => setTimeout(resolve, 300));
+                finalScore.textContent = `最终得分: ${Math.floor(score)}`;
+                
+                // 提交当前分数
+                await fetch('/.netlify/functions/submit-game-score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: user.name,
+                        score: Math.floor(score)
+                    })
+                });
+                
+                // 检查是否打破记录
+                if (Math.floor(score) > topScoreData.topScore) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    schoolRecord.textContent = `新的记录保持者: ${user.name} (${Math.floor(score)}分)!`;
+                    schoolRecord.style.color = '#FF4081';
+                    schoolRecord.style.fontWeight = 'bold';
                 }
-            });
-
-            drawPipes();
-
-            ctx.fillStyle = '#FF6347';
-            ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
-
-            ctx.fillStyle = '#FFF';
-            ctx.font = 'bold 24px Arial';
-            ctx.fillText('Score: ' + score, 30, 50);
-            ctx.fillText('High Score: ' + highScore, WINDOW_WIDTH - 180, 50);
-        }
-
-        function endGame() {
-            gameActive = false;
-            if (score > highScore) {
-                highScore = score;
+                
+                // 显示随机搞笑消息
+                const messages = funnyMessages[currentCharacter];
+                const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+                funnyMessage.textContent = randomMessage;
+                
+                // 启用重启按钮
+                restartButton.disabled = false;
+                restartButton.style.backgroundColor = '#4CAF50';
+                restartButton.style.cursor = 'pointer';
+                restartButton.textContent = '再来一局';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                schoolRecord.textContent = '无法获取校记录信息';
+                finalScore.textContent = `最终得分: ${Math.floor(score)}`;
+                funnyMessage.textContent = '发生错误，请稍后再试';
+                
+                // 即使出错也启用重启按钮
+                restartButton.disabled = false;
+                restartButton.style.backgroundColor = '#4CAF50';
+                restartButton.style.cursor = 'pointer';
+                restartButton.textContent = '再来一局';
             }
-            showVipEndScreen();
         }
 
+        // 添加重启游戏函数
         function restartGame() {
-            gameActive = true;
-            pipes = [];
-            score = 0;
-            bird.y = WINDOW_HEIGHT / 2;
-            gameLoop();
+            // 直接重新加载页面
+            window.location.reload();
+        }
+
+        // 修改 checkCollision 函数中的游戏结束逻辑
+        function checkCollision() {
+            if (bird.y <= 0 || bird.y + bird.height >= WINDOW_HEIGHT) {
+                playSound(hitSound);
+                gameActive = false;
+                showVipEndScreen();
+                return false;
+            }
+
+            for (let pipe of pipes) {
+                if (bird.x < pipe.x + pipe.width &&
+                    bird.x + bird.width > pipe.x &&
+                    bird.y < pipe.y + pipe.height &&
+                    bird.y + bird.height > pipe.y) {
+                    playSound(hitSound);
+                    gameActive = false;
+                    showVipEndScreen();
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function drawBird() {
+            if (imageLoaded) {
+                ctx.save();
+                ctx.translate(bird.x + bird.width / 2, bird.y + bird.height / 2);
+                ctx.rotate(birdMovement * 0.02);
+
+                // 开始裁剪路径
+                ctx.beginPath();
+                
+                // 制椭圆
+                ctx.ellipse(
+                    0,              // 中心点x
+                    0,              // 中心点y
+                    bird.width/2,   // 横向半径
+                    bird.height/2,  // 纵向半径
+                    0,              // 旋转角度
+                    0,              // 起始角度
+                    Math.PI * 2     // 结束角度
+                );
+                
+                // 应用裁剪
+                ctx.clip();
+
+                // 绘制原始图片
+                ctx.drawImage(
+                    birdImage,
+                    -bird.width / 2,
+                    -bird.height / 2,
+                    bird.width,
+                    bird.height
+                );
+                
+                ctx.restore();
+            } else {
+                ctx.fillStyle = 'red';
+                ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'black';
+            ctx.font = '36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Score: ${Math.floor(score)}`, WINDOW_WIDTH/2, 50);
+            
+            if (!gameActive) {
+                ctx.fillText(`High Score: ${highScore}`, WINDOW_WIDTH/2, 100);
+                ctx.font = '24px Arial';
+                ctx.fillText('Press Space or Touch to Restart', WINDOW_WIDTH/2, WINDOW_HEIGHT/2);
+            }
         }
 
         function gameLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            updateGame();
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+            if (gameActive) {
+                birdMovement += GRAVITY;
+                bird.y += birdMovement;
+
+                pipes.forEach(pipe => {
+                    pipe.x -= 2;
+                });
+
+                pipes = pipes.filter(pipe => pipe.x > -PIPE_WIDTH);
+
+                if (pipes.length === 0 || pipes[pipes.length - 2].x < WINDOW_WIDTH - 300) {
+                    createPipe();
+                }
+
+                pipes.forEach(pipe => {
+                    if (!pipe.passed && pipe.x + pipe.width < bird.x) {
+                        pipe.passed = true;
+                        score += 0.5;
+                        playSound(scoreSound);
+                    }
+                });
+
+                gameActive = checkCollision();
+
+                drawPipes();
+                drawBird();
+            } else {
+                if (score > highScore) {
+                    highScore = Math.floor(score);
+                }
+            }
+
+            drawScore();
             requestAnimationFrame(gameLoop);
         }
 
-        document.addEventListener('keydown', function(e) {
-            if (e.code === 'Space') {
-                birdMovement = -6;
-                playSound(currentFlapSound);
-            }
-        });
-
-        document.addEventListener('touchstart', function() {
+        // Add touch/click controls
+        function handleJump() {
             if (gameActive) {
-                birdMovement = -6;
-                playSound(currentFlapSound);
+                birdMovement = -5;
+                playSound(currentFlapSound); // 使用当前角色的拍打音效
+            } else {
+                gameActive = true;
+                pipes = [];
+                bird.y = WINDOW_HEIGHT / 2;
+                birdMovement = 0;
+                score = 0;
+            }
+        }
+
+        // Event listeners for multiple control methods
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                handleJump();
+                event.preventDefault(); // Prevent page scrolling
             }
         });
 
+        // Touch controls
+        canvas.addEventListener('touchstart', (event) => {
+            handleJump();
+            event.preventDefault(); // Prevent default touch behaviors
+        });
+
+        // Mouse controls
+        canvas.addEventListener('click', (event) => {
+            handleJump();
+            event.preventDefault();
+        });
+
+        // Start game function
+        function startGame() {
+            imageLoaded = true;
+            resizeGame(); // 初始化尺寸
+            gameActive = true;
+            score = 0;
+            pipes = [];
+            birdMovement = 0;
+            gameLoop();
+        }
+
+        // Don't start game loop immediately - wait for image or error
+
+        // Initialize sounds when page loads
+        preloadSounds();
+
+        // 修改resize处理函数
+        function resizeGame() {
+            // 获取窗口宽度，但限制最大宽度
+            const maxWidth = 600;
+            WINDOW_WIDTH = Math.min(window.innerWidth - 20, maxWidth);
+            WINDOW_HEIGHT = WINDOW_WIDTH * 1.5;
+            
+            // 更新canvas尺寸
+            canvas.width = WINDOW_WIDTH;
+            canvas.height = WINDOW_HEIGHT;
+            
+            // 更新游戏参数
+            PIPE_WIDTH = WINDOW_WIDTH * 0.125;
+            PIPE_GAP = WINDOW_HEIGHT * 0.25;    // 水管间隙为窗口高度的1/4
+            BIRD_WIDTH = WINDOW_WIDTH * 0.1;
+            BIRD_HEIGHT = WINDOW_HEIGHT * 0.05;
+            
+            // 更新鸟的位置和大小
+            bird.width = BIRD_WIDTH;
+            bird.height = BIRD_HEIGHT;
+            bird.x = WINDOW_WIDTH * 0.25;
+            
+            // 如果是初始化，设置鸟的初始Y位置
+            if (bird.y === 0) {
+                bird.y = WINDOW_HEIGHT / 2;
+            }
+        }
+
+        // 添加窗口resize事件监听
         window.addEventListener('resize', resizeGame);
+
+        // 确保在页面加载完成后初始化
+        window.addEventListener('load', () => {
+            resizeGame();
+            preloadSounds();
+        });
+
+        // 添加动画样式
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            @keyframes bounce {
+                0%, 100% { transform: translateY(0) rotate(0deg); }
+                50% { transform: translateY(-20px) rotate(10deg); }
+            }
+        `;
+        document.head.appendChild(styleSheet);
     </script>
 </body>
 </html>
+
