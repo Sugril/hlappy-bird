@@ -328,7 +328,7 @@
                 schoolRecord.textContent = `校记录保持者: ${topScoreData.topPlayer} (${topScoreData.topScore}分)`;
                 
                 // 短暂延迟后显示当前分数
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 300));
                 finalScore.textContent = `最终得分: ${Math.floor(score)}`;
                 
                 // 提交当前分数
